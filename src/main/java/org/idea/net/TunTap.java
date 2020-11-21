@@ -91,7 +91,7 @@ public class TunTap implements Closeable {
 			@Override
 			public int read() throws IOException {
 				if (TunTap.await(fd, timeout) == false) {
-					return 0;
+					return -1;
 				}
 				
 				ByteBuffer bb = ByteBuffer.allocateDirect(1);

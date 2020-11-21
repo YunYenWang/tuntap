@@ -1,16 +1,24 @@
 plugins {
 	id 'java'
 	id 'eclipse'
+	id 'application'
 }
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
+
+mainClassName = 'org.idea.Main'
+applicationDefaultJvmArgs = ["-Djava.library.path=lib", "-Dgnu.io.rxtx.SerialPorts=/dev/ttyO1:/dev/ttyO2:/dev/ttyO3:/dev/ttyO4:/dev/ttyUSB0:/dev/ttyUSB1:/dev/ttyUSB2:/dev/ttyUSB3:/dev/ttyUSB4:/dev/ttyUSB5:/dev/ttyUSB6"]
+
+jar.enabled = true
 
 repositories {
 	jcenter()
 }
 
 dependencies {
+	compile fileTree(dir: 'libs', include: ['*.jar'])
+
 	compileOnly 'org.projectlombok:lombok:1.18.12'
 	annotationProcessor 'org.projectlombok:lombok:1.18.12'
 
