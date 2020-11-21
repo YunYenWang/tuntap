@@ -1,6 +1,9 @@
 package org.idea;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -22,43 +25,86 @@ public class Main {
 		System.out.println();
 	}
 	
+	static int checksum(byte[] bytes, int len) {
+		int cs = 0;
+		
+		for (int i = 0;i < len;i++) {
+			cs += (bytes[i] & 0x0FF);
+		}
+		
+		return cs & 0x0FF;
+	}
+	
 	static byte[] readPdu(DataInputStream dis) throws IOException {
-		int s;
-		for (;;) {		
-			s = dis.read();
-			if (s > 0) {
+		for (;;) {
+			int c = dis.read();
+			if (c < 0) {
+				throw new IOException("Serial communication is broken");
+			}
+			
+			if (c == 0x0A) { // seek the head of magic
 				break;
 			}
 		}
 		
-		byte[] bytes = new byte[s];
+		if (dis.read() != 0x0B) {
+			log.error("Magic head error");
+			return null;
+		}
+		
+		int len = dis.readUnsignedShort();
+		
+		byte[] bytes = new byte[len];
 		dis.readFully(bytes);
+		
+		int cs = dis.read();
+		if (cs != checksum(bytes, len)) {
+			log.error("Checksum error - len: " + len);			
+			return null;
+		}
 		
 		return bytes;
 	}
 	
-	static void writePdu(OutputStream os, byte[] bytes, int len) throws IOException {
-		os.write(len);
-		os.write(bytes, 0, len);
-		os.flush();
+	static void writePdu(DataOutputStream dos, byte[] bytes, int len) throws IOException {
+		dos.write(0x0A); dos.write(0x0B);
+		dos.writeShort((short) len);
+		dos.write(bytes, 0, len);
+		dos.write(checksum(bytes, len));
+		dos.flush();
 	}
 	
 	static void fromSerialToTap(InputStream is, OutputStream os) throws IOException {
-		DataInputStream dis = new DataInputStream(is);
+		DataInputStream dis = new DataInputStream(new BufferedInputStream(is));
 		
 		for (;;) {
-			byte[] bytes = readPdu(dis);			
-			os.write(bytes);
+			byte[] bytes = readPdu(dis);
+			if ((bytes == null) || (bytes.length == 0)) {
+				continue;
+			}
 			
-			dump(bytes, bytes.length);
+			System.out.println("From serial port - " + bytes.length);
+//			dump(bytes, bytes.length);
+			
+			os.write(bytes);
+			os.flush();
 		}
 	}
 	
 	static void fromTapToSerial(InputStream is, OutputStream os) throws IOException {
+		DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(os, 4096));
+		
 		byte[] bytes = new byte[4096];
 		int s;
 		while ((s = is.read(bytes)) >= 0) {
-			writePdu(os, bytes, s);
+			if (s == 0) {
+				continue;
+			}
+			
+			System.out.println("From tap0 - " + s);
+//			dump(bytes, s);
+			
+			writePdu(dos, bytes, s);
 		}
 	}
 	
@@ -96,7 +142,7 @@ public class Main {
 						SerialPort.DATABITS_8,
 						SerialPort.STOPBITS_1,
 						SerialPort.PARITY_NONE);	
-		
+				
 				new Thread(() -> {
 					try {
 						fromTapToSerial(tap.getInputStream(), serial.getOutputStream());
